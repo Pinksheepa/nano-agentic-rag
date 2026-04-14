@@ -1,15 +1,15 @@
 datasets
-# pyarrow
-# pandas
+pyarrow
+pandas
 tqdm
-# numpy
+numpy
 torch
 transformers
 sentence-transformers
 langchain
 langchain-community
 langchain-text-splitters
-# faiss-cpu
-smolagents
-duckduckgo-search
+faiss-cpu
+smolagents[openai]
+ddgs
 modelscope

@@ -9,13 +9,14 @@ from smolagents import Tool
 class SemanticRetriever(Tool):
     name = "semantic_retriever"
     description = (
-        "Return the top-k documents whose embeddings are most similar to the input query. "
-        "The query should be phrased affirmatively, not as a question."
+        "Search the local encyclopedia-style knowledge base and return the top-k most relevant documents. "
+        "Prefer this tool for stable factual questions, definitions, concepts, and topics likely covered by the local corpus. "
+        "Use an affirmative search phrase, not a question."
     )
     inputs = {
         "query": {
             "type": "string",
-            "description": "Affirmative search phrase aligned with target documents.",
+            "description": "Affirmative search phrase aligned with target documents in the local knowledge base.",
         }
     }
     output_type = "string"

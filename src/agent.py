@@ -29,20 +29,44 @@ def load_vectorstore(index_dir, embedding):
     )
 
 
+def env_flag(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def get_model_settings() -> tuple[str | None, str, str | None]:
+    api_key = (
+        os.getenv("OPENAI_API_KEY")
+        or os.getenv("MODELSCOPE_API_KEY")
+        or os.getenv("DEEPSEEK_API_KEY")
+    )
+    model_id = os.getenv("OPENAI_MODEL") or os.getenv("MODELSCOPE_MODEL") or "deepseek-chat"
+    api_base = os.getenv("OPENAI_BASE_URL") or os.getenv("MODELSCOPE_BASE_URL") or ""
+    return api_key, model_id, api_base or None
+
+
 def build_model():
-    api_key = os.getenv("OPENAI_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
+    api_key, model_id, api_base = get_model_settings()
     if not api_key:
         return None
 
-    model_id = os.getenv("OPENAI_MODEL", "deepseek-chat")
-    api_base = os.getenv("OPENAI_BASE_URL", "")
-    api_base = api_base if api_base else None
+    custom_role_conversions = {"system": "user"} if env_flag("SMOLAGENTS_SYSTEM_TO_USER") else None
+    flatten_messages_as_text = env_flag("SMOLAGENTS_FLATTEN_MESSAGES")
 
     return OpenAIServerModel(
         model_id=model_id,
         api_key=api_key,
         api_base=api_base,
+        custom_role_conversions=custom_role_conversions,
+        flatten_messages_as_text=flatten_messages_as_text,
     )
+
+
+def interactive_loop(run_query) -> None:
+    while True:
+        query = input("Enter your query (blank to exit): ").strip()
+        if not query:
+            break
+        print(run_query(query))
 
 
 def main() -> None:
@@ -52,6 +76,8 @@ def main() -> None:
     parser.add_argument("--top_k", type=int, default=TOP_K)
     parser.add_argument("--batch_size", type=int, default=BATCH_SIZE)
     parser.add_argument("--retrieval_only", action="store_true")
+    parser.add_argument("--query", type=str, default=None)
+    parser.add_argument("--disable_web_search", action="store_true")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
 
@@ -59,26 +85,32 @@ def main() -> None:
     vectorstore = load_vectorstore(args.index_dir, embedding)
 
     retriever_tool = SemanticRetriever(vectorstore, top_k=args.top_k)
-    web_tool = WebSearchTool()
+    tools = [retriever_tool]
+    if not args.disable_web_search:
+        tools.append(WebSearchTool())
 
     model = build_model()
     if model is None or args.retrieval_only:
-        print("No API key found or retrieval-only mode enabled. Running retrieval only.")
-        while True:
-            query = input("Enter your query (blank to exit): ").strip()
-            if not query:
-                break
-            print(retriever_tool.forward(query))
+        print("Running retrieval-only mode with tool: semantic_retriever")
+        if args.query:
+            print(retriever_tool.forward(args.query))
+            return
+        interactive_loop(retriever_tool.forward)
         return
 
-    agent = ToolCallingAgent(tools=[retriever_tool, web_tool], model=model)
+    agent = ToolCallingAgent(tools=tools, model=model)
+    tool_names = ", ".join(tool.name for tool in tools)
+    print(f"Running smolagents mode with tools: {tool_names}")
 
-    while True:
-        query = input("Enter your query (blank to exit): ").strip()
-        if not query:
-            break
+    def run_agent_query(query: str) -> str:
         result = agent.run(query)
-        print("Response:", result)
+        return f"Response: {result}"
+
+    if args.query:
+        print(run_agent_query(args.query))
+        return
+
+    interactive_loop(run_agent_query)
 
 
 if __name__ == "__main__":

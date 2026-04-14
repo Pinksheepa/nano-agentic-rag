@@ -6,7 +6,7 @@ from typing import Dict, Iterable, Iterator
 
 
 def iter_jsonl(path: Path) -> Iterator[Dict]:
-    with path.open("r", encoding="utf-8") as f:
+    with path.open("r", encoding="utf-8-sig") as f:
         for line in f:
             line = line.strip()
             if not line:

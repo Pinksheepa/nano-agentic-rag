@@ -5,9 +5,15 @@ from smolagents import Tool
 
 class WebSearchTool(Tool):
     name = "web_search"
-    description = "Search the public web and return a short list of results."
+    description = (
+        "Search the public web for recent, time-sensitive, or missing information not well covered by the local knowledge base. "
+        "Prefer this tool for latest news, changing facts, or when local retrieval is weak."
+    )
     inputs = {
-        "query": {"type": "string", "description": "Search query"},
+        "query": {
+            "type": "string",
+            "description": "Concrete web search query for recent or external information.",
+        },
     }
     output_type = "string"
 
@@ -17,9 +23,9 @@ class WebSearchTool(Tool):
 
     def forward(self, query: str) -> str:
         try:
-            from duckduckgo_search import DDGS
+            from ddgs import DDGS
         except Exception:
-            return "Web search unavailable. Install duckduckgo-search to enable."
+            return "Web search unavailable. Install ddgs to enable."
 
         results = []
         with DDGS() as ddgs:

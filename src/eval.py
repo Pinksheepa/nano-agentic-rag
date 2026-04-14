@@ -29,8 +29,13 @@ def load_vectorstore(index_dir, embedding):
     )
 
 
-def keyword_hit(text: str, keywords: list[str]) -> bool:
-    return any(k in text for k in keywords)
+def keyword_match(text: str, keywords: list[str], match_mode: str) -> tuple[bool, list[str]]:
+    matched = [keyword for keyword in keywords if keyword in text]
+    if not keywords:
+        return False, matched
+    if match_mode == "all":
+        return len(matched) == len(keywords), matched
+    return len(matched) > 0, matched
 
 
 def main() -> None:
@@ -42,6 +47,7 @@ def main() -> None:
     parser.add_argument("--top_k", type=int, default=TOP_K)
     parser.add_argument("--batch_size", type=int, default=BATCH_SIZE)
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
+    parser.add_argument("--match_mode", choices=("any", "all"), default="any")
     args = parser.parse_args()
 
     embedding = build_embeddings(args.embedding_model, args.device, args.batch_size)
@@ -56,16 +62,17 @@ def main() -> None:
         gold_keywords = row.get("gold_keywords", [])
         docs = vectorstore.similarity_search(question, k=args.top_k)
         joined = "\n".join([d.page_content for d in docs])
-        hit = False
-        if gold_keywords:
-            hit = keyword_hit(joined, gold_keywords)
+        hit, matched_keywords = keyword_match(joined, gold_keywords, args.match_mode)
 
         results.append(
             {
                 "id": row.get("id", ""),
                 "question": question,
                 "gold_keywords": gold_keywords,
+                "matched_keywords": matched_keywords,
+                "match_mode": args.match_mode,
                 "hit": hit,
+                "retrieved_titles": [d.metadata.get("title", "") for d in docs],
                 "top_k_docs": [d.page_content for d in docs],
             }
         )
@@ -78,7 +85,7 @@ def main() -> None:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
     hit_rate = (hits / total) if total else 0.0
-    print(f"Questions: {total} | Hit@{args.top_k}: {hit_rate:.2%}")
+    print(f"Questions: {total} | Hit@{args.top_k} ({args.match_mode}): {hit_rate:.2%}")
     print(f"Wrote {args.output}")
 
 
